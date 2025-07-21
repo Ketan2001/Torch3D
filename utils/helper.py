@@ -19,11 +19,40 @@ def get_skey_symm_matrix(u):
 
     return u_hat
 
+
 def cross_product(u, v):
     assert u.shape == (3, 1) and v.shape == (3, 1)
     
     u_hat = get_skey_symm_matrix(u)
     return u_hat @ v
+
+
+def cross_product_2d(u: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
+    """
+    batch cross prodict of 2d vectors
+    params:
+        u: torch.Tensor of shape (N, 2) or (1, 2)
+        v: torch.Tensor of shape (N, 2) or (1, 2)
+    returns:
+        torch.Tensor of shape (N, 2)
+    """
+    return ((u * torch.flip(v, dims=(-1,))) @ torch.tensor([[1.], [-1.]])).squeeze(-1)
+
+
+def cross_product_3d(u: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
+    """
+    batch cross prodict of 2d vectors
+    params:
+        u: torch.Tensor of shape (N, 3) or (1, 3)
+        v: torch.Tensor of shape (N, 3) or (1, 3)
+    returns:
+        torch.Tensor of shape (N, 3)
+    """
+    x = u[:, 1] * v[:, 2] - u[:, 2] * v[:, 1]
+    y =  u[:, 2] * v[:, 0] - u[:, 0] * v[:, 2]
+    z =  u[:, 0] * v[:, 1] - u[:, 1] * v[:, 0]
+
+    return torch.cat([x, y, z], dim=-1)
 
 
 def get_rotation_mat(w, theta, mode: Literal["degree", "rad"] = "rad"):
@@ -43,7 +72,7 @@ def get_rotation_mat(w, theta, mode: Literal["degree", "rad"] = "rad"):
     return torch.eye(3) + w_hat * math.sin(theta) + (w_hat @ w_hat) * (1. - math.cos(theta)) # + w @ w.T - torch.identity(3) * (1. - torch.cos(theta))
 
 
-def read_vector(x: list | torch.Tensor):
+def read_3d_vector(x: list | torch.Tensor):
     if isinstance(x, list):
         x = torch.tensor(x)
     
@@ -82,9 +111,9 @@ def get_look_at_transform(
     returns:
         R_cw, t_cw that transform from world to camera coordinates
     """
-    position = read_vector(position)
-    target = read_vector(target)
-    up = read_vector(up)
+    position = read_3d_vector(position)
+    target = read_3d_vector(target)
+    up = read_3d_vector(up)
 
     up /= torch.norm(up)
 

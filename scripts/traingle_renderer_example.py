@@ -2,57 +2,50 @@ from scene.scene import Scene
 from scene.renderer import TriangleRenderer
 from objects.camera import Camera
 import torch
-import math
-import time
-import cv2
-import numpy as np
-from utils.helper import get_look_at_transform, get_rotation_mat
-from utils.io import read_obj
+from utils.helper import get_look_at_transform
+from utils.io import read_obj, save_image
 
 
-scene = Scene()
-renderer = TriangleRenderer()
+scene = Scene(ambient_strength=0.1)
 
-vertices, faces = read_obj('./assets/sphere.obj')
+scene.add_light(direction=[-1., -1., -1.])
+scene.add_light(direction=[0., -1., 0.])
+
+renderer = TriangleRenderer(scene)
+
+vertices, faces = read_obj('./assets/stanford_bunny.obj')
 
 faces = torch.tensor(faces, dtype=torch.int32)
 
 for point in vertices:
     scene.add_point(point)
 
+colors = torch.ones((len(scene.points), 3))
 
-colors = torch.rand((len(scene.points), 3))
+R, t = get_look_at_transform(
+    position=[0., 0., 3.],
+    target=[0., 0., 0],
+    up=[0., 1., 0]
+)
 
+canvas = (1080, 1920)
 
-for i in range(100):
-    R, t = get_look_at_transform(
-        position=[5 * math.sin(i / 5), 0, 5 * math.cos(i / 5)],
-        target=[0., 0., 0],
-        up=[0., 1., 0]
-    )
-    cam = Camera(R, t, c_x=1980 / 2, c_y=1080/2)
+cam = Camera(R, t, c_x=canvas[1] / 2, c_y=canvas[0] / 2)
 
-    verts_proj, z_coords, valid_verts = cam.project(scene.points)
+verts_proj, z_coords, valid_verts = cam.project(scene.points)
 
-    # get face indices that have all three vertices in front of the camera
-    valid_face_indices = torch.where(
-        torch.all(torch.isin(faces, valid_verts), dim=-1)
-    )[0]
+# get face indices that have all three vertices in front of the camera
+valid_face_indices = torch.where(
+    torch.all(torch.isin(faces, valid_verts), dim=-1)
+)[0]
 
-    img = renderer.render(
-        vertex_projections=verts_proj[:, :2, 0],
-        z_coords=z_coords,
-        faces=faces[valid_face_indices],
-        colors=colors,
-        resolution=(1080, 1920) # (H, W)
-    )
+img = renderer.render(
+    verts=scene.points[:, :3, :],
+    vertex_projections=verts_proj[:, :2, 0],
+    z_coords=z_coords,
+    faces=faces[valid_face_indices],
+    colors=colors,
+    resolution=canvas # (H, W)
+)
 
-    img_np = (img.detach().cpu().numpy() * 255).astype(np.uint8)
-
-    cv2.imshow('Triangle Renderer', cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR))
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-
-    time.sleep(0.05)
-
-cv2.destroyAllWindows()
+save_image(img, 'rabbit.png')

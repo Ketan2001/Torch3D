@@ -1,13 +1,14 @@
 import torch
 from objects.points import Point3D
-from typing import Literal
-from utils.helper import get_4d_transform
+from utils.helper import get_4d_transform, read_3d_vector
 
 
 class Scene:
-    def __init__(self, renderer: Literal["mesh", "plt"] = "plt"):
+    def __init__(self, ambient_strength: float = 0.4):
         self.points = torch.empty((0, 4, 1))
         self.edges = []
+        self.ambient_strength = ambient_strength
+        self.lights = []
 
     def add_point(self, data: torch.Tensor | list):
         if isinstance(data, list):
@@ -37,6 +38,13 @@ class Scene:
 
     def add_edge(self, edge: tuple[int]):
         self.edges.append(edge)
+    
+    def add_light(self, direction: list | torch.Tensor):
+        dir = read_3d_vector(direction)
+        dir /= torch.linalg.norm(dir)
+        self.lights.append(dir)
+
+        return dir
     
     def transform_points(self, R: torch.Tensor, t: torch.Tensor):
         tform = get_4d_transform(R, t)

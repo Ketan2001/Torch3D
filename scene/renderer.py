@@ -1,7 +1,11 @@
 import torch
-import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
+from utils.helper import (
+    cross_product_2d, 
+    cross_product_3d,
+)
+from scene.scene import Scene
 
 
 class MatplotlibRenderer:
@@ -42,12 +46,14 @@ class MatplotlibRenderer:
 
 class TriangleRenderer:
     def __init__(
-        self
+        self,
+        scene: Scene
     ):
-        pass
+        self.scene: Scene = scene
 
     def render(
         self, 
+        verts: torch.Tensor, # (num_verts, 3, 1)
         vertex_projections: torch.Tensor, # (num_verts, 2)
         z_coords: torch.Tensor, # (num_verts, 1)
         faces: torch.Tensor, # (num_traingles, 3)
@@ -64,6 +70,8 @@ class TriangleRenderer:
 
         # for each traingle, get a bounding box
         face_verts = vertex_projections[faces] # (num_traingles, 3, 2)
+        face_verts_3d = verts[faces] # (num_triangles, 3, 3)
+
         face_colors = colors[faces] # (num_triangles, 3, 3)
         face_depths = z_coords[faces] # (num_traingles, 3, 1)
 
@@ -82,6 +90,24 @@ class TriangleRenderer:
         for tri_idx, tri in enumerate(face_verts):
             v0, v1, v2 = tri[0:1], tri[1:2], tri[2:]
 
+            # compute face normal 
+            tri_verts_3d = face_verts_3d[tri_idx]
+            normal = cross_product_3d(
+                tri_verts_3d[1:2] - tri_verts_3d[0:1], 
+                tri_verts_3d[2:3] - tri_verts_3d[1:2]
+            )
+            normal /= torch.linalg.norm(normal)
+
+            directional_component = 0.
+            # use nomrals to compute directional lighting component
+            for light in self.scene.lights:
+                # compute dot product with face normal
+                dot = -normal @ light
+
+                dot = max(0., dot.item())
+
+                directional_component += dot
+
             x_coords = torch.arange(
                 min_x[tri_idx], max_x[tri_idx], 1
             , dtype=torch.int32)
@@ -95,42 +121,45 @@ class TriangleRenderer:
             points_test = torch.cat(
                 [grid_x[..., None], grid_y[..., None]], 
                 dim=-1
-            ).reshape(-1, 2)
+            ).reshape(-1, 2) # (n, 2)
 
-            e_01 = TriangleRenderer.edge_func(v_s=v0, v_e=v1, p=points_test)
-            e_12 = TriangleRenderer.edge_func(v_s=v1, v_e=v2, p=points_test)
-            e_20 = TriangleRenderer.edge_func(v_s=v2, v_e=v0, p=points_test)
+            e_01 = TriangleRenderer.edge_func(v_s=v0, v_e=v1, p=points_test) # (n,)
+            e_12 = TriangleRenderer.edge_func(v_s=v1, v_e=v2, p=points_test) # (n,)
+            e_20 = TriangleRenderer.edge_func(v_s=v2, v_e=v0, p=points_test) # (n,)
 
             valid_indices = torch.where(
                 (e_01 > 0) & (e_12 > 0) & (e_20 > 0)
-            )[0]
+            )[0] # (n')
 
             if not len(valid_indices):
                 continue
 
-            valid_pixels = points_test[valid_indices]
+            # import pdb; pdb.set_trace()
+
+            valid_pixels = points_test[valid_indices] # (n', 2)
 
             # for the valid pixels compute barycentric coords
             bary = torch.stack(
                 [e_12, e_20, e_01], dim=-1
-            )
+            ) # (n, 3)
 
-            bary /= bary.sum(-1, keepdim=True)
-
-            bary_valid = bary[valid_indices]
+            bary /= bary.sum(-1, keepdim=True) # (n, 3)
+            bary_valid = bary[valid_indices] # (n', 3)
 
             # compute depths
 
             # incorrect way (values don't vary linearly beacause of the perspective divide)
             # depths = (bary_valid @ face_depths[tri_idx]).squeeze(-1)
 
-            inverse_depths = (bary_valid @ (1. / face_depths[tri_idx]))
-            depths = (1. / inverse_depths).squeeze(-1)
+            inverse_depths = (bary_valid @ (1. / face_depths[tri_idx])) # (n', 1)
+            depths = (1. / inverse_depths).squeeze(-1) # (n')
 
-            _ind = torch.where(
-                depths - depth_buffer[valid_pixels[:, 0], valid_pixels[:, 1]]
-            )[0] 
+            # indices in valid indices which pass depth test
+            _ind = torch.where(depth_buffer[valid_pixels[:, 0], valid_pixels[:, 1]] - depths > 0)[0]
 
+            if not len(_ind):
+                continue
+            
             depth_buffer[valid_pixels[_ind, 0], valid_pixels[_ind, 1]] = depths[_ind]
 
             valid_depth_filtered = valid_indices[_ind]
@@ -140,9 +169,13 @@ class TriangleRenderer:
 
             # perpsective correct interpolation of color
             colors_by_z = face_colors[tri_idx] / face_depths[tri_idx]
-            interp_colors = (bary_valid @ colors_by_z[None, ...]) / inverse_depths
-            image[valid_pixels[:, 0], valid_pixels[:, 1]] = interp_colors
-        
+
+            interp_colors = (bary_valid @ colors_by_z) / inverse_depths[_ind]
+
+            image[valid_pixels[:, 0], valid_pixels[:, 1]] = interp_colors * (
+                self.scene.ambient_strength + directional_component
+            )
+
         return image
 
     @staticmethod
@@ -155,4 +188,4 @@ class TriangleRenderer:
         returns:
             cross product (p - v_s) x (v_e - v_s)
         """
-        return (((p - v_s) * torch.flip((v_e - v_s), dims=(-1,))) @ torch.tensor([[1.], [-1.]])).squeeze(-1)
+        return cross_product_2d(p - v_s, v_e - v_s)
