@@ -17,7 +17,8 @@ class Camera:
         f: float = 0.1,
         c_x: float = 256,
         c_y: float = 256,
-        alpha: float = 3000,
+        m: float = 3000,
+        device: torch.device = torch.device("cpu"),
         type: Literal["persp", "ortho"] = "persp"
     ):
         """
@@ -31,15 +32,15 @@ class Camera:
         assert f > 0.
 
         self.f = f
-        self.R = R # (3, 3)
-        self.t = t # (3, 1)
+        self.R = R.to(device) # (3, 3)
+        self.t = t.to(device) # (3, 1)
         self.K = torch.tensor([
-            [f * alpha, 0., c_x],
-            [0., -f * alpha, c_y],
+            [f * m, 0., c_x],
+            [0., -f * m, c_y],
             [0., 0., 1.]
-        ])
+        ]).to(device)
 
-        self.M = torch.cat([R, t], dim=-1)
+        self.M = torch.cat([self.R, self.t], dim=-1)
 
         if type == 'persp':
             self.P = self.K @ self.M # (3, 4)
@@ -53,11 +54,11 @@ class Camera:
     
     @property
     def camera_transform(self):
-        return self.M.unsqueeze(0)
+        return self.M
     
     @property
     def intrinsic_matrix(self):
-        return self.K.unsqueeze(0)
+        return self.K
     
     def project(self, points: torch.Tensor):
         """

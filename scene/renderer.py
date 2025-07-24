@@ -47,7 +47,7 @@ class MatplotlibRenderer:
 class TriangleRenderer:
     def __init__(
         self,
-        scene: Scene
+        scene: Scene,
     ):
         self.scene: Scene = scene
 
@@ -58,15 +58,18 @@ class TriangleRenderer:
         z_coords: torch.Tensor, # (num_verts, 1)
         faces: torch.Tensor, # (num_traingles, 3)
         colors: torch.Tensor, # (num_verts, 3),
-        resolution: tuple[int] = (512, 512)
+        resolution: tuple[int] = (512, 512),
     ):
+        device = verts.device
+
         # this flip accounts for the fact that images are indexed [rows, columns]
         # where rows -> down, columns -> right in image space
         # the vertex_projections have x-coords -> right, y-coord -> down
         vertex_projections = torch.flip(vertex_projections, [1])
-        image = torch.zeros((resolution[0], resolution[1], 3)) # RGB image
+        image = torch.zeros((resolution[0], resolution[1], 3)).to(device) # RGB image
 
-        depth_buffer = torch.full(resolution, fill_value=torch.finfo(torch.float32).max, dtype=torch.float32)
+        depth_buffer = torch.full(resolution, fill_value=torch.finfo(torch.float32).max, dtype=torch.float32).to(device)
+        tri_idx_buffer = torch.full(resolution + (4,), fill_value=-1, dtype=torch.float32).to(device)
 
         # for each traingle, get a bounding box
         face_verts = vertex_projections[faces] # (num_traingles, 3, 2)
@@ -100,20 +103,20 @@ class TriangleRenderer:
 
             directional_component = 0.
             # use nomrals to compute directional lighting component
-            for light in self.scene.lights:
+            for light, light_mult in self.scene.lights:
                 # compute dot product with face normal
                 dot = -normal @ light
 
                 dot = max(0., dot.item())
 
-                directional_component += dot
+                directional_component += dot * light_mult
 
             x_coords = torch.arange(
                 min_x[tri_idx], max_x[tri_idx], 1
-            , dtype=torch.int32)
+            , dtype=torch.int32, device=device)
             y_coords = torch.arange(
                 min_y[tri_idx], max_y[tri_idx], 1
-            , dtype=torch.int32)
+            , dtype=torch.int32, device=device)
 
             grid_x = x_coords.reshape(-1, 1).expand(-1, len(y_coords))
             grid_y = y_coords.reshape(1, -1).expand(len(x_coords), -1)
@@ -133,8 +136,6 @@ class TriangleRenderer:
 
             if not len(valid_indices):
                 continue
-
-            # import pdb; pdb.set_trace()
 
             valid_pixels = points_test[valid_indices] # (n', 2)
 
@@ -176,7 +177,11 @@ class TriangleRenderer:
                 self.scene.ambient_strength + directional_component
             )
 
-        return image
+            tri_idx_buffer[valid_pixels[:, 0], valid_pixels[:, 1]] = torch.cat(
+                [torch.tensor([tri_idx]*len(valid_pixels), device=device)[:, None], bary_valid], dim=-1
+            )
+
+        return image, tri_idx_buffer
 
     @staticmethod
     def edge_func(v_s, v_e, p):

@@ -58,7 +58,8 @@ def save_image(img: torch.Tensor | np.ndarray, output_path: str | Path):
     if isinstance(img, torch.Tensor):
         img = img.detach().cpu().numpy()
     
-    img = img.clip(0., 1.) * 255.
+    if img.dtype == np.float32:
+        img = img.clip(0., 1.) * 255.
     
     if img.ndim == 3:
         # image is RGB or grayscale with channel dimension already added

@@ -36,7 +36,7 @@ def cross_product_2d(u: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
     returns:
         torch.Tensor of shape (N, 2)
     """
-    return ((u * torch.flip(v, dims=(-1,))) @ torch.tensor([[1.], [-1.]])).squeeze(-1)
+    return ((u * torch.flip(v, dims=(-1,))) @ torch.tensor([[1.], [-1.]], device=v.device)).squeeze(-1)
 
 
 def cross_product_3d(u: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
@@ -72,9 +72,9 @@ def get_rotation_mat(w, theta, mode: Literal["degree", "rad"] = "rad"):
     return torch.eye(3) + w_hat * math.sin(theta) + (w_hat @ w_hat) * (1. - math.cos(theta)) # + w @ w.T - torch.identity(3) * (1. - torch.cos(theta))
 
 
-def read_3d_vector(x: list | torch.Tensor):
+def read_3d_vector(x: list | torch.Tensor, device: torch.device = torch.device("cpu")):
     if isinstance(x, list):
-        x = torch.tensor(x)
+        x = torch.tensor(x, device=device)
     
     x = x.view(-1)
     assert x.shape[0] == 3, f'Expecting 3D vector to have 3 coordinates, found {x}, having {x.shape[0]} coordintes'
