@@ -1,6 +1,18 @@
 This repository is supposed to have prmitives for 3D vision. The goal is to have atomic objects and functions that allow quick and easy visualization of concepts. This is supposed to be a growing project, where I add more functionality as I learn more things.
 
-### Why this exist
+### Current Functionality
 
-I was going through the excruciatng process of learning Multiple View Geometry. It is quite difficult to build intuition around projective geometry as a beginner. Even when you feel confident about a fact after verifying it algebraically not seeing what it means visually leaves some level of understanding on the table. That is exactly what I wish to solve for. I want to have simple primitives that can be used to describe a scene. Points and edges to describe 3D objects, utilities for common transforms and simple wireframe visualizations. I also plan on adding support for Differentialble Rendering as I progress.
+- A 3D mesh renderer with basic flat lighting. 
+- A wireframe rendered
+- A script to create a synthetic dataset for SfM
+
+### Creating a dataset
+
+Look at the script `scripts/create_dataset.py`. Given a `.obj` file, takes images in a ring around the object, saving metatdata like camera parameters and GT correspondences.
+
+Parameters that can be manipulated
+- Lighting Directions and Strength
+- Camera Parameters
+
+Make the necessary adjustments to the `DatasetConifg` dataclass in the script and run it, for each view, you get an image, camera matrix, and labels for each pixel. 
 
