@@ -192,8 +192,7 @@ def vis_correspondences(dataset_dir: str | Path):
                 [locs_view_1[0][0], locs_view_2[0][0]]
             )
     
-    # sample any 10 and put red dots
-    for idx, (x, x_dash) in enumerate(correspondences):
+    for x, x_dash in correspondences:
         img_1[x[0], x[1]] = [255, 0, 0]
         img_2[x_dash[0], x_dash[1]] = [255, 0, 0]
     
@@ -202,5 +201,5 @@ def vis_correspondences(dataset_dir: str | Path):
 
 
 if __name__ == '__main__':
-    # main(config=DatasetConifg(out_dir=Path("bunny_dataset")))
+    main(config=DatasetConifg(out_dir=Path("bunny_dataset")))
     vis_correspondences("bunny_dataset")

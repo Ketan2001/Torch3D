@@ -16,3 +16,8 @@ Parameters that can be manipulated
 
 Make the necessary adjustments to the `DatasetConifg` dataclass in the script and run it, for each view, you get an image, camera matrix, and labels for each pixel. 
 
+Here is an example visualization of two views and the GT correspondences based on the geometry.
+
+![View 1](./assets/rabbit_view_1.png "View 1") ![View 2](./assets/rabbit_view_2.png "View 2")
+
+
